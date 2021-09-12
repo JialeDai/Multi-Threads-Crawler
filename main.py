@@ -26,7 +26,11 @@ class CrawlThread(threading.Thread):
             if self.queue.empty():
                 break
             else:
+<<<<<<< HEAD
                 page = self.queue.get()[1]
+=======
+                page = self.queue.get()
+>>>>>>> 7b9e6415150736111d078eec8a4d549031bd69f3
                 print('当前工作线程为：', self.thread_id, '正在采集：', page)
                 ag_list = [
                     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
@@ -83,6 +87,7 @@ class ParserThread(threading.Thread):
                     #     'content': content
                     # }  # 构造json
                     # # json.dump(response, fp=self.file, ensure_ascii=False)  # 存放json文件
+<<<<<<< HEAD
                     if check_validation(site, visited):
                         self.file.write(site + '\n')
                         print(site)
@@ -95,6 +100,12 @@ class ParserThread(threading.Thread):
 
                             increase_priority(page_queue, site)
 
+=======
+                    if (check_validation(site, visited)):
+                        self.file.write(site+'\n')
+                        print(site)
+                        page_queue.put(site)
+>>>>>>> 7b9e6415150736111d078eec8a4d549031bd69f3
                 except Exception as e:
                     print('parse 2: ', e)
 
@@ -102,6 +113,7 @@ class ParserThread(threading.Thread):
             print('parse 1: ', e)
 
 
+<<<<<<< HEAD
 '''
 update the priority in page queue
 '''
@@ -161,6 +173,10 @@ a url is invalid if it is in wrong format or the url is revisited and  has alrea
 
 def check_validation(url, visited):
     if (not re.match(r'^https?:/{2}\w.+$', url)) or (url in visited.keys() and visited[url] == 1):
+=======
+def check_validation(url, visited):
+    if (not re.match(r'^https?:/{2}\w.+$', url)) or url in visited:
+>>>>>>> 7b9e6415150736111d078eec8a4d549031bd69f3
         return False
     else:
         return True
@@ -175,12 +191,15 @@ def progress_bar(cur_process):
 
 page_queue = PriorityQueue()
 data_queue = Queue()
+<<<<<<< HEAD
 '''
 visited is a dict record the status of the url
 value has two condition: 
     0-> haven't been consume by page queue
     1-> already be consumed by page queue
 '''
+=======
+>>>>>>> 7b9e6415150736111d078eec8a4d549031bd69f3
 visited = {}
 min_distance = 0
 flag = False
@@ -191,7 +210,11 @@ def main():
     url = 'https://www.google.com'
     wd = input('input key word for searching:')
     wd = urllib.request.quote(wd)
+<<<<<<< HEAD
     output = open(wd + '.txt', 'a', encoding='utf-8')
+=======
+    output = open(wd+'.txt', 'a', encoding='utf-8')
+>>>>>>> 7b9e6415150736111d078eec8a4d549031bd69f3
     full_url = url + '/search?q=' + wd
 
     driver = webdriver.Chrome('/usr/local/Caskroom/chromedriver/92.0.4515.107/chromedriver')
@@ -224,7 +247,11 @@ def main():
     print('start crawling')
     print('Initialize seed queue......')
     for i in range(0, num_seeds):
+<<<<<<< HEAD
         page_queue.put((1, seeds[i]))
+=======
+        page_queue.put(seeds[i])
+>>>>>>> 7b9e6415150736111d078eec8a4d549031bd69f3
 
     # 初始化采集线程
     crawl_threads = []
