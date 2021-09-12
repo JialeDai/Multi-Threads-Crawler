@@ -28,7 +28,7 @@ class CrawlThread(threading.Thread):
                 break
             else:
                 page = self.queue.get()[1]
-                print('当前工作线程为：', self.thread_id, '正在采集：', page)
+                print('当前工作线程为：', self.thread_id, ' 正在采集：', page)
                 ag_list = [
                     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
                     "Mozilla/5.0 (Windows NT 6.1; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
@@ -46,7 +46,6 @@ class CrawlThread(threading.Thread):
                     data_queue.put(html)
                 except Exception as e:
                     print('采集线程错误', e)
-                # print(html)
 
 
 class ParserThread(threading.Thread):
@@ -79,13 +78,12 @@ class ParserThread(threading.Thread):
                         self.file.write(site + '\n')
                         print(site)
                         if site not in visited.keys():
-                            page_queue.put(site)
+                            page_queue.put((1,site.encode('utf-8').decode()))
                         else:
                             '''
                             update the priority of site in priority queue
                             '''
-
-                            increase_priority(page_queue, site)
+                            increase_priority(page_queue, site.encode('utf-8').decode())
                 except Exception as e:
                     print('parse 2: ', e)
 
@@ -217,23 +215,24 @@ def main():
     if num_seeds > len(seeds):
         num_seeds = len(seeds)
     print('start crawling')
+    print('seeds:\n', seeds)
     print('Initialize seed queue......')
     for i in range(0, num_seeds):
         page_queue.put((1, seeds[i]))
-    # 初始化采集线程
+    # initialize the crawl threads
     crawl_threads = []
     crawl_name_list = ['crawl_1', 'crawl_2', 'crawl_3']
     for thread_id in crawl_name_list:
-        thread = CrawlThread(thread_id, page_queue)  # 启动爬虫线程
-        thread.start()  # 启动线程
+        thread = CrawlThread(thread_id, page_queue)  # create crawl thread
+        thread.start()  # start crawl thread
         crawl_threads.append(thread)
 
-    # 初始化解析线程
+    # initialize parser thread
     parse_thread = []
     parser_name_list = ['parse_1', 'parse_2', 'parse_3']
-    for thread_id in parser_name_list:  #
+    for thread_id in parser_name_list:
         thread = ParserThread(thread_id, data_queue, output)
-        thread.start()  # 启动线程
+        thread.start()
         parse_thread.append(thread)
 
     while not page_queue.empty():
