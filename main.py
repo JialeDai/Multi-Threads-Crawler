@@ -1,4 +1,5 @@
 import configparser
+import json
 import random
 import re
 import sys
@@ -27,7 +28,9 @@ class CrawlThread(threading.Thread):
             if self.queue.empty():
                 break
             else:
+                score = self.queue.get()[0]
                 page = self.queue.get()[1]
+                distance = self.queue.get()[2]
                 print('当前工作线程为：', self.thread_id, ' 正在采集：', page)
                 ag_list = [
                     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
@@ -43,9 +46,9 @@ class CrawlThread(threading.Thread):
                     request.add_header('User-Agent', user_agent)
                     response = urllib.request.urlopen(request)
                     html = response.read()
-                    data_queue.put(html)
+                    data_queue.put({'score':score, 'html':html, 'distance':distance})
                 except Exception as e:
-                    print('采集线程错误', e)
+                    print('crawl tread exception:', e)
 
 
 class ParserThread(threading.Thread):
@@ -70,15 +73,18 @@ class ParserThread(threading.Thread):
 
     def parse_data(self, item):
         try:
-            html = etree.HTML(item)
+            score = item['score']
+            html = etree.HTML(item['html'])
+            distance = item['distance']
             result = html.xpath("//div/a/@href")
             for site in result:
                 try:
                     if check_validation(site, visited):
-                        self.file.write(site + '\n')
+                        url_info = {'url':site, "distance":distance+1,'score':score}
+                        self.file.write(json.dumps(url_info) + '\n')
                         print(site)
                         if site not in visited.keys():
-                            page_queue.put((1,site.encode('utf-8').decode()))
+                            page_queue.put((1, site.encode('utf-8').decode(), distance+1))
                         else:
                             '''
                             update the priority of site in priority queue
@@ -218,10 +224,12 @@ def main():
     print('seeds:\n', seeds)
     print('Initialize seed queue......')
     for i in range(0, num_seeds):
-        page_queue.put((1, seeds[i]))
+        page_queue.put((1, seeds[i],0)) # priority, url, distance
+        url_info = {'url': seeds[i], "distance": 0, 'score': 1}
+        output.write(json.dumps(url_info) + '\n')
     # initialize the crawl threads
     crawl_threads = []
-    crawl_name_list = ['crawl_1', 'crawl_2', 'crawl_3']
+    crawl_name_list = ['crawl_1', 'crawl_2', 'crawl_3','crawl_4', 'crawl_5', 'crawl_6','crawl_7', 'crawl_8', 'crawl_9']
     for thread_id in crawl_name_list:
         thread = CrawlThread(thread_id, page_queue)  # create crawl thread
         thread.start()  # start crawl thread
