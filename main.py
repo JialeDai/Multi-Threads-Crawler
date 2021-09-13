@@ -26,7 +26,7 @@ class CrawlThread(threading.Thread):
     def crawl_spider(self):
         while True:
             if self.queue.empty():
-                break
+                continue
             else:
                 score = self.queue.get()[0]
                 page = self.queue.get()[1]
