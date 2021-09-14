@@ -27,7 +27,7 @@ class CrawlThread(threading.Thread):
     def crawl_spider(self):
         while True:
             if self.queue.empty():
-                continue
+                break
             else:
                 score = self.queue.get()[0]
                 page = self.queue.get()[1]
@@ -49,7 +49,7 @@ class CrawlThread(threading.Thread):
                     if response.getcode() != 200:
                         continue
                     html = response.read()
-                    crawl_info = {'url': page, 'score': score}
+                    crawl_info = {'url': page, 'score': score, 'page_size(byte)': sys.getsizeof(html), 'download_time':time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
                     self.file.write(json.dumps(crawl_info) + '\n')
                     data_queue.put({'score': score, 'html': html, 'distance': distance, 'url': page})
                     visited[page] = -1
@@ -90,7 +90,7 @@ class ParserThread(threading.Thread):
                 site = result[i]
                 try:
                     if check_validation(site, visited):
-                        cur_score = score + (i + 1) / sub_url_count # novelty
+                        cur_score = score + (i + 1) / sub_url_count  # novelty
                         url_info = {'url': site, "distance": distance + 1, 'score': cur_score}
                         self.file.write(json.dumps(url_info) + '\n')
                         if site not in visited.keys():

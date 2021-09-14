@@ -1,5 +1,6 @@
 # Default ignored files
 /*.txt
+/*.log
 /shelf/
 /workspace.xml
 <<<<<<< HEAD
