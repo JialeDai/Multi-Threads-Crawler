@@ -1,5 +1,0 @@
-{"url": "https://www.youtube.com/watch?v=vQCTTvUqhOQ", "distance": 0, "score": 1}
-{"url": "https://northeastern.afford.com/", "distance": 0, "score": 1}
-{"url": "https://neuconcepts.net/", "distance": 0, "score": 1}
-{"url": "https://www2.illinois.gov/dceo/CURENEU/Pages/default.aspx", "distance": 0, "score": 1}
-{"url": "https://jobs.chronicle.com/job/378179/arlington-regional-dean-and-ceo/", "distance": 0, "score": 1}

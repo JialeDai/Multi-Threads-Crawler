@@ -13,10 +13,11 @@ from selenium import webdriver
 
 
 class CrawlThread(threading.Thread):
-    def __init__(self, thread_id, queue):
+    def __init__(self, thread_id, queue, file):
         threading.Thread.__init__(self)
         self.thread_id = thread_id
         self.queue = queue
+        self.file = file
 
     def run(self):
         print('启动线程：', self.thread_id)
@@ -45,8 +46,13 @@ class CrawlThread(threading.Thread):
                     request = urllib.request.Request(page)
                     request.add_header('User-Agent', user_agent)
                     response = urllib.request.urlopen(request)
+                    if response.getcode() != 200:
+                        continue
                     html = response.read()
-                    data_queue.put({'score':score, 'html':html, 'distance':distance})
+                    crawl_info = {'url': page, 'score': score}
+                    self.file.write(json.dumps(crawl_info) + '\n')
+                    data_queue.put({'score': score, 'html': html, 'distance': distance, 'url': page})
+                    visited[page] = -1
                 except Exception as e:
                     print('crawl tread exception:', e)
 
@@ -63,6 +69,7 @@ class ParserThread(threading.Thread):
         while not flag:
             try:
                 item = self.queue.get(False)  # get参数为false时队列为空，会抛出异常
+
                 if not item:
                     pass
                 self.parse_data(item)
@@ -76,25 +83,64 @@ class ParserThread(threading.Thread):
             score = item['score']
             html = etree.HTML(item['html'])
             distance = item['distance']
+            url = item['url']
             result = html.xpath("//div/a/@href")
-            for site in result:
+            sub_url_count = len(result)
+            for i in range(0, len(result)):
+                site = result[i]
                 try:
                     if check_validation(site, visited):
-                        url_info = {'url':site, "distance":distance+1,'score':score}
+                        cur_score = score + (i + 1) / sub_url_count # novelty
+                        url_info = {'url': site, "distance": distance + 1, 'score': cur_score}
                         self.file.write(json.dumps(url_info) + '\n')
-                        print(site)
                         if site not in visited.keys():
-                            page_queue.put((1, site.encode('utf-8').decode(), distance+1))
+                            print(site)
+                            page_queue.put((cur_score, site.encode('utf-8').decode(), distance + 1, url))
+                            visited[site] = 1
                         else:
                             '''
-                            update the priority of site in priority queue
+                            importance: other already  crawled pages that have a hyperlink to this page.
+                            increase the priority of site in priority queue
                             '''
                             increase_priority(page_queue, site.encode('utf-8').decode())
+                            visited[site] = visited[site] + 1
+                    # else:
+                    #     cur_score = score + (i + 1) / sub_url_count
+                    #     site = convert_sub_url(url, site)
+                    #     url_info = {'url': site, "distance": distance + 1, 'score': cur_score}
+                    #     self.file.write(json.dumps(url_info) + '\n')
+                    #
+                    #     if site not in visited.keys():
+                    #         print(site)
+                    #         page_queue.put((cur_score, site.encode('utf-8').decode(), distance + 1, url))
+                    #         visited[site] = 1
+                    #     else:
+                    #         '''
+                    #         importance: other already  crawled pages that have a hyperlink to this page.
+                    #         increase the priority of site in priority queue
+                    #         '''
+                    #         increase_priority(page_queue, site.encode('utf-8').decode())
+                    #         visited[site] = visited[site] + 1
                 except Exception as e:
                     print('parse 2: ', e)
 
         except Exception as e:
             print('parse 1: ', e)
+
+
+'''
+convert url
+example: dining.html -> https://housing.nyu.edu/summer/dining.html
+'''
+
+
+def convert_sub_url(url, sub_url):
+    tmp = url.split('/')
+    if sub_url == '/':
+        url.replace(tmp[-1], '')
+    elif re.match(r'\.html$', sub_url):
+        url.replace(tmp[-1], sub_url)
+    return url
 
 
 '''
@@ -125,7 +171,12 @@ def increase_priority(queue, url):
     while not queue.empty():
         cur = queue.get()
         if cur[1] == url:
-            cur[0] -= 1
+            cur_score = cur[0]
+            site = cur[1]
+            distance = cur[2]
+            url = cur[3]
+            new_item = (cur_score - 1, site, distance, url)
+            tmp.append(new_item)
             break
         tmp.append(cur)
     for each in tmp:
@@ -155,7 +206,7 @@ a url is invalid if it is in wrong format or the url is revisited and  has alrea
 
 
 def check_validation(url, visited):
-    if (not re.match(r'^https?:/{2}\w.+$', url)) or (url in visited.keys() and visited[url] == 1):
+    if (not re.match(r'^https?:/{2}\w.+$', url)) or (url in visited.keys() and visited[url] == -1):
         return False
     else:
         return True
@@ -187,7 +238,9 @@ def main():
     url = 'https://www.google.com'
     wd = input('input key word for searching:')
     wd = urllib.request.quote(wd)
-    output = open(wd + '.txt', 'a', encoding='utf-8')
+
+    output = open(wd + '.log', 'a', encoding='utf-8')
+    crawl_log_file = open('crawl_' + wd + '.log', 'a', encoding='utf-8')
     full_url = url + '/search?q=' + wd
 
     config = configparser.ConfigParser()
@@ -224,14 +277,15 @@ def main():
     print('seeds:\n', seeds)
     print('Initialize seed queue......')
     for i in range(0, num_seeds):
-        page_queue.put((1, seeds[i],0)) # priority, url, distance
+        page_queue.put((1, seeds[i], 0, ''))  # priority, url, distance, parent_url
         url_info = {'url': seeds[i], "distance": 0, 'score': 1}
         output.write(json.dumps(url_info) + '\n')
+        visited[seeds[i]] = 1
     # initialize the crawl threads
     crawl_threads = []
-    crawl_name_list = ['crawl_1', 'crawl_2', 'crawl_3','crawl_4', 'crawl_5', 'crawl_6','crawl_7', 'crawl_8', 'crawl_9']
+    crawl_name_list = ['crawl_1', 'crawl_2', 'crawl_3']
     for thread_id in crawl_name_list:
-        thread = CrawlThread(thread_id, page_queue)  # create crawl thread
+        thread = CrawlThread(thread_id, page_queue, crawl_log_file)  # create crawl thread
         thread.start()  # start crawl thread
         crawl_threads.append(thread)
 
@@ -257,7 +311,7 @@ def main():
     for t in parse_thread:
         t.join()
 
-    print('退出主线程')
+    print('quit main thread')
     output.close()
 
 
