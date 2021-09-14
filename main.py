@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 import urllib.request
+from urllib.parse import urljoin
 from queue import Queue, PriorityQueue
 
 from lxml import etree
@@ -13,16 +14,17 @@ from selenium import webdriver
 
 
 class CrawlThread(threading.Thread):
-    def __init__(self, thread_id, queue, file):
+    def __init__(self, thread_id, queue, file, type_black_list):
         threading.Thread.__init__(self)
         self.thread_id = thread_id
         self.queue = queue
         self.file = file
+        self.type_black_list = type_black_list
 
     def run(self):
-        print('启动线程：', self.thread_id)
+        print('activate thread: ', self.thread_id)
         self.crawl_spider()
-        print('退出了该线程：', self.thread_id)
+        print('exit thread: ', self.thread_id)
 
     def crawl_spider(self):
         while True:
@@ -32,7 +34,7 @@ class CrawlThread(threading.Thread):
                 score = self.queue.get()[0]
                 page = self.queue.get()[1]
                 distance = self.queue.get()[2]
-                print('当前工作线程为：', self.thread_id, ' 正在采集：', page)
+                print(self.thread_id, ' is crawling', page)
                 ag_list = [
                     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
                     "Mozilla/5.0 (Windows NT 6.1; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
@@ -46,10 +48,12 @@ class CrawlThread(threading.Thread):
                     request = urllib.request.Request(page)
                     request.add_header('User-Agent', user_agent)
                     response = urllib.request.urlopen(request)
-                    if response.getcode() != 200:
+                    if response.getcode() != 200 or response.info().get_content_type() in self.type_black_list:
+                        print(response.getcode(), response.info().get_content_type(), self.type_black_list)
                         continue
                     html = response.read()
-                    crawl_info = {'url': page, 'score': score, 'page_size(byte)': sys.getsizeof(html), 'download_time':time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+                    crawl_info = {'url': page, 'score': score, 'page_size(byte)': sys.getsizeof(html),
+                                  'download_time': time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
                     self.file.write(json.dumps(crawl_info) + '\n')
                     data_queue.put({'score': score, 'html': html, 'distance': distance, 'url': page})
                     visited[page] = -1
@@ -90,6 +94,7 @@ class ParserThread(threading.Thread):
                 site = result[i]
                 try:
                     if check_validation(site, visited):
+                        site = convert_sub_url(url, site)
                         cur_score = score + (i + 1) / sub_url_count  # novelty
                         url_info = {'url': site, "distance": distance + 1, 'score': cur_score}
                         self.file.write(json.dumps(url_info) + '\n')
@@ -104,23 +109,6 @@ class ParserThread(threading.Thread):
                             '''
                             increase_priority(page_queue, site.encode('utf-8').decode())
                             visited[site] = visited[site] + 1
-                    # else:
-                    #     cur_score = score + (i + 1) / sub_url_count
-                    #     site = convert_sub_url(url, site)
-                    #     url_info = {'url': site, "distance": distance + 1, 'score': cur_score}
-                    #     self.file.write(json.dumps(url_info) + '\n')
-                    #
-                    #     if site not in visited.keys():
-                    #         print(site)
-                    #         page_queue.put((cur_score, site.encode('utf-8').decode(), distance + 1, url))
-                    #         visited[site] = 1
-                    #     else:
-                    #         '''
-                    #         importance: other already  crawled pages that have a hyperlink to this page.
-                    #         increase the priority of site in priority queue
-                    #         '''
-                    #         increase_priority(page_queue, site.encode('utf-8').decode())
-                    #         visited[site] = visited[site] + 1
                 except Exception as e:
                     print('parse 2: ', e)
 
@@ -135,12 +123,7 @@ example: dining.html -> https://housing.nyu.edu/summer/dining.html
 
 
 def convert_sub_url(url, sub_url):
-    tmp = url.split('/')
-    if sub_url == '/':
-        url.replace(tmp[-1], '')
-    elif re.match(r'\.html$', sub_url):
-        url.replace(tmp[-1], sub_url)
-    return url
+    return urljoin(url, sub_url)
 
 
 '''
@@ -239,13 +222,14 @@ def main():
     wd = input('input key word for searching:')
     wd = urllib.request.quote(wd)
 
-    output = open(wd + '.log', 'a', encoding='utf-8')
-    crawl_log_file = open('crawl_' + wd + '.log', 'a', encoding='utf-8')
+    output = open('./data_log/' + wd + '.log', 'a', encoding='utf-8')
+    crawl_log_file = open('./crawl_log/' + 'crawl_' + wd + '.log', 'a', encoding='utf-8')
     full_url = url + '/search?q=' + wd
 
     config = configparser.ConfigParser()
     config.read("./config/config.ini")
-    driver_url = config['chromedriver']['macbook']
+    driver_url = config['chromedriver']['location']
+    type_black_list = config['type_black_list']['list'].split(',')
     driver = webdriver.Chrome(driver_url)
     driver.get(full_url)
 
@@ -273,9 +257,11 @@ def main():
     num_seeds = int(num_seeds)
     if num_seeds > len(seeds):
         num_seeds = len(seeds)
+
     print('start crawling')
     print('seeds:\n', seeds)
     print('Initialize seed queue......')
+
     for i in range(0, num_seeds):
         page_queue.put((1, seeds[i], 0, ''))  # priority, url, distance, parent_url
         url_info = {'url': seeds[i], "distance": 0, 'score': 1}
@@ -285,7 +271,7 @@ def main():
     crawl_threads = []
     crawl_name_list = ['crawl_1', 'crawl_2', 'crawl_3']
     for thread_id in crawl_name_list:
-        thread = CrawlThread(thread_id, page_queue, crawl_log_file)  # create crawl thread
+        thread = CrawlThread(thread_id, page_queue, crawl_log_file, type_black_list)  # create crawl thread
         thread.start()  # start crawl thread
         crawl_threads.append(thread)
 
