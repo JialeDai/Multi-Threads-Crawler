@@ -14,12 +14,13 @@ from selenium import webdriver
 
 
 class CrawlThread(threading.Thread):
-    def __init__(self, thread_id, queue, file, type_black_list):
+    def __init__(self, thread_id, queue, file, type_black_list, crawl_mode):
         threading.Thread.__init__(self)
         self.thread_id = thread_id
         self.queue = queue
         self.file = file
         self.type_black_list = type_black_list
+        self.crawl_mode = crawl_mode
 
     def run(self):
         print('activate thread: ', self.thread_id)
@@ -27,46 +28,100 @@ class CrawlThread(threading.Thread):
         print('exit thread: ', self.thread_id)
 
     def crawl_spider(self):
+        ag_list = [
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
+            "Mozilla/5.0 (Windows NT 6.1; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
+            "Opera/9.80 (Macintosh; Intel Mac OS X 10.6.8; U; en) Presto/2.8.131 Version/11.11",
+            "Opera/9.80 (Windows NT 6.1; U; en) Presto/2.8.131 Version/11.11",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) AppleWebKit/535.11 (KHTML, like Gecko) Chrome/17.0.963.56 Safari/535.11"
+        ]
         while True:
             if self.queue.empty():
                 break
             else:
-                score = self.queue.get()[0]
-                page = self.queue.get()[1]
-                distance = self.queue.get()[2]
-                print(self.thread_id, ' is crawling', page)
-                ag_list = [
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
-                    "Mozilla/5.0 (Windows NT 6.1; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
-                    "Opera/9.80 (Macintosh; Intel Mac OS X 10.6.8; U; en) Presto/2.8.131 Version/11.11",
-                    "Opera/9.80 (Windows NT 6.1; U; en) Presto/2.8.131 Version/11.11",
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) AppleWebKit/535.11 (KHTML, like Gecko) Chrome/17.0.963.56 Safari/535.11"
-                ]
-
-                try:
-                    user_agent = random.choice(ag_list)
-                    request = urllib.request.Request(page)
-                    request.add_header('User-Agent', user_agent)
-                    response = urllib.request.urlopen(request)
-                    if response.getcode() != 200 or response.info().get_content_type() in self.type_black_list:
-                        print(response.getcode(), response.info().get_content_type(), self.type_black_list)
+                if self.crawl_mode == '0':
+                    page = self.queue.get()[0]
+                    if page == 'h':
                         continue
-                    html = response.read()
-                    crawl_info = {'url': page, 'score': score, 'page_size(byte)': sys.getsizeof(html),
-                                  'download_time': time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-                    self.file.write(json.dumps(crawl_info) + '\n')
-                    data_queue.put({'score': score, 'html': html, 'distance': distance, 'url': page})
-                    visited[page] = -1
-                except Exception as e:
-                    print('crawl tread exception:', e)
+                    distance = self.queue.get()[1]
+                    print(self.thread_id, "is crawling", page, "distance: ", distance)
+                    try:
+                        user_agent = random.choice(ag_list)
+                        request = urllib.request.Request(page)
+                        request.add_header('User-Agent', user_agent)
+                        response = urllib.request.urlopen(request)
+                        if response.getcode() != 200 or response.info().get_content_type() in self.type_black_list:
+                            print(response.getcode(), response.info().get_content_type(), self.type_black_list)
+                            continue
+                        html = response.read()
+                        crawl_info = {'url': page, 'page_size(byte)': sys.getsizeof(html),
+                                      'download_time': time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+                        self.file.write(json.dumps(crawl_info) + '\n')
+                        data_queue.put({'html': html, 'distance': distance, 'url': page})
+                        visited[page] = -1
+                    except Exception as e:
+                        print('crawl tread exception:', e)
+                elif self.crawl_mode == '1':
+                    if page == 'h':
+                        continue
+                    score = self.queue.get()[0]
+                    page = self.queue.get()[1]
+                    distance = self.queue.get()[2]
+                    print(self.thread_id, ' is crawling', page)
+                    try:
+                        user_agent = random.choice(ag_list)
+                        request = urllib.request.Request(page)
+                        request.add_header('User-Agent', user_agent)
+                        response = urllib.request.urlopen(request)
+                        if response.getcode() != 200 or response.info().get_content_type() in self.type_black_list:
+                            print(response.getcode(), response.info().get_content_type(), self.type_black_list)
+                            continue
+                        html = response.read()
+                        crawl_info = {'url': page, 'score': score, 'page_size(byte)': sys.getsizeof(html),
+                                      'download_time': time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+                        self.file.write(json.dumps(crawl_info) + '\n')
+                        data_queue.put({'score': score, 'html': html, 'distance': distance, 'url': page})
+                        visited[page] = -1
+                    except Exception as e:
+                        print('crawl tread exception:', e)
+
+                # score = self.queue.get()[0]
+                # page = self.queue.get()[1]
+                # distance = self.queue.get()[2]
+                # print(self.thread_id, ' is crawling', page)
+                # ag_list = [
+                #     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
+                #     "Mozilla/5.0 (Windows NT 6.1; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
+                #     "Opera/9.80 (Macintosh; Intel Mac OS X 10.6.8; U; en) Presto/2.8.131 Version/11.11",
+                #     "Opera/9.80 (Windows NT 6.1; U; en) Presto/2.8.131 Version/11.11",
+                #     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) AppleWebKit/535.11 (KHTML, like Gecko) Chrome/17.0.963.56 Safari/535.11"
+                # ]
+
+                # try:
+                #     user_agent = random.choice(ag_list)
+                #     request = urllib.request.Request(page)
+                #     request.add_header('User-Agent', user_agent)
+                #     response = urllib.request.urlopen(request)
+                #     if response.getcode() != 200 or response.info().get_content_type() in self.type_black_list:
+                #         print(response.getcode(), response.info().get_content_type(), self.type_black_list)
+                #         continue
+                #     html = response.read()
+                #     crawl_info = {'url': page, 'score': score, 'page_size(byte)': sys.getsizeof(html),
+                #                   'download_time': time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+                #     self.file.write(json.dumps(crawl_info) + '\n')
+                #     data_queue.put({'score': score, 'html': html, 'distance': distance, 'url': page})
+                #     visited[page] = -1
+                # except Exception as e:
+                #     print('crawl tread exception:', e)
 
 
 class ParserThread(threading.Thread):
-    def __init__(self, thread_id, queue, file):
+    def __init__(self, thread_id, queue, file, crawl_mode):
         threading.Thread.__init__(self)
         self.thread_id = thread_id
         self.queue = queue
         self.file = file
+        self.crawl_mode = crawl_mode
 
     def run(self):
         # print('启动线程', self.thread_id)
@@ -83,37 +138,56 @@ class ParserThread(threading.Thread):
             # print('退出了该线程：', self.thread_id)
 
     def parse_data(self, item):
-        try:
-            score = item['score']
+        if self.crawl_mode == '0':
             html = etree.HTML(item['html'])
             distance = item['distance']
-            url = item['url']
+            # url = item['url']
             result = html.xpath("//div/a/@href")
-            sub_url_count = len(result)
             for i in range(0, len(result)):
                 site = result[i]
                 try:
                     if check_validation(site, visited):
-                        site = convert_sub_url(url, site)
-                        cur_score = score + (i + 1) / sub_url_count  # novelty
-                        url_info = {'url': site, "distance": distance + 1, 'score': cur_score}
+                        # site = convert_sub_url(url, site)
+                        url_info = {'url': site, 'distance': str(distance + 1)}
                         self.file.write(json.dumps(url_info) + '\n')
                         if site not in visited.keys():
-                            print(site)
-                            page_queue.put((cur_score, site.encode('utf-8').decode(), distance + 1, url))
+                            # print(site)
+                            page_queue_bfs.put((site, distance + 1))
                             visited[site] = 1
-                        else:
-                            '''
-                            importance: other already  crawled pages that have a hyperlink to this page.
-                            increase the priority of site in priority queue
-                            '''
-                            increase_priority(page_queue, site.encode('utf-8').decode())
-                            visited[site] = visited[site] + 1
                 except Exception as e:
                     print('parse 2: ', e)
+        elif self.crawl_mode == '1':
+            try:
+                score = item['score']
+                html = etree.HTML(item['html'])
+                distance = item['distance']
+                url = item['url']
+                result = html.xpath("//div/a/@href")
+                sub_url_count = len(result)
+                for i in range(0, len(result)):
+                    site = result[i]
+                    try:
+                        if check_validation(site, visited):
+                            site = convert_sub_url(url, site)
+                            cur_score = score + (i + 1) / sub_url_count  # novelty
+                            url_info = {'url': site, "distance": distance + 1, 'score': cur_score}
+                            self.file.write(json.dumps(url_info) + '\n')
+                            if site not in visited.keys():
+                                print(site)
+                                page_queue.put((cur_score, site.encode('utf-8').decode(), distance + 1, url))
+                                visited[site] = 1
+                            else:
+                                '''
+                                importance: other already  crawled pages that have a hyperlink to this page.
+                                increase the priority of site in priority queue
+                                '''
+                                increase_priority(page_queue, site.encode('utf-8').decode())
+                                visited[site] = visited[site] + 1
+                    except Exception as e:
+                        print('parse 2: ', e)
 
-        except Exception as e:
-            print('parse 1: ', e)
+            except Exception as e:
+                print('parse 1: ', e)
 
 
 '''
@@ -189,7 +263,7 @@ a url is invalid if it is in wrong format or the url is revisited and  has alrea
 
 
 def check_validation(url, visited):
-    if (not re.match(r'^https?:/{2}\w.+$', url)) or (url in visited.keys() and visited[url] == -1):
+    if (not re.match(r'^https?:/{2}\w.+$', url)) or (url in visited.keys() and visited[url] == -1 or url == 'h'):
         return False
     else:
         return True
@@ -203,6 +277,7 @@ def progress_bar(cur_process):
 
 
 page_queue = PriorityQueue()
+page_queue_bfs = Queue()
 data_queue = Queue()
 
 '''
@@ -214,6 +289,7 @@ value has two condition:
 visited = {}
 min_distance = 0
 flag = False
+mode = ''
 
 
 def main():
@@ -222,7 +298,7 @@ def main():
     wd = input('input key word for searching:')
     wd = urllib.request.quote(wd)
 
-    output = open('./data_log/' + wd + '.log', 'a', encoding='utf-8')
+    # output = open('./data_log/' + wd + '.log', 'a', encoding='utf-8')
     crawl_log_file = open('./crawl_log/' + 'crawl_' + wd + '.log', 'a', encoding='utf-8')
     full_url = url + '/search?q=' + wd
 
@@ -253,33 +329,62 @@ def main():
     if len(seeds) == 0:
         print("no seed url available")
         return
-    num_seeds = input("input the number of seeds you want to start with:")
-    num_seeds = int(num_seeds)
-    if num_seeds > len(seeds):
-        num_seeds = len(seeds)
+    mode_choice = None
+    while mode_choice != '0' and mode_choice != '1':
+        mode_choice = input('please input 0 or 1:\n[0] BFS crawl\n[1]prioritized crawl\n')
+    if mode_choice == '0':
+        print('###################start with BFS mode#####################')
+        output = open('./data_log/' + wd + '_bfs.log', 'a', encoding='utf-8')
+        for i in range(0, len(seeds)):
+            page_queue_bfs.put((seeds[i], 0))  # priority, url, distance, parent_url
+            url_info = {'url': seeds[i], "distance": 0}
+            output.write(json.dumps(url_info) + '\n')
+            visited[seeds[i]] = 1
+        # initialize the crawl threads
+        crawl_threads = []
+        crawl_name_list = ['crawl_1', 'crawl_2', 'crawl_3']
+        for thread_id in crawl_name_list:
+            thread = CrawlThread(thread_id, page_queue_bfs, crawl_log_file, type_black_list,
+                                 mode_choice)  # create crawl thread
+            thread.start()  # start crawl thread
+            crawl_threads.append(thread)
+    elif mode_choice == '1':
+        print('###################start with prioritized mode#############')
+        output = open('./data_log/' + wd + '_prioritized.log', 'a', encoding='utf-8')
+        for i in range(0, len(seeds)):
+            page_queue.put((1, seeds[i], 0, ''))  # priority, url, distance, parent_url
+            url_info = {'url': seeds[i], "distance": 0, 'score': 1}
+            output.write(json.dumps(url_info) + '\n')
+            visited[seeds[i]] = 1
+        # initialize the crawl threads
+        crawl_threads = []
+        crawl_name_list = ['crawl_1', 'crawl_2', 'crawl_3']
+        for thread_id in crawl_name_list:
+            thread = CrawlThread(thread_id, page_queue, crawl_log_file, type_black_list,
+                                 mode_choice)  # create crawl thread
+            thread.start()  # start crawl thread
+            crawl_threads.append(thread)
+
+    # num_seeds = input("input the number of seeds you want to start with:")
+    # num_seeds = int(num_seeds)
+    # if num_seeds > len(seeds):
+    #     num_seeds = len(seeds)
 
     print('start crawling')
-    print('seeds:\n', seeds)
-    print('Initialize seed queue......')
+    # print('seeds:\n', seeds)
+    # print('Initialize seed queue......')
 
-    for i in range(0, num_seeds):
-        page_queue.put((1, seeds[i], 0, ''))  # priority, url, distance, parent_url
-        url_info = {'url': seeds[i], "distance": 0, 'score': 1}
-        output.write(json.dumps(url_info) + '\n')
-        visited[seeds[i]] = 1
-    # initialize the crawl threads
-    crawl_threads = []
-    crawl_name_list = ['crawl_1', 'crawl_2', 'crawl_3']
-    for thread_id in crawl_name_list:
-        thread = CrawlThread(thread_id, page_queue, crawl_log_file, type_black_list)  # create crawl thread
-        thread.start()  # start crawl thread
-        crawl_threads.append(thread)
+    # for i in range(0, num_seeds):
+    #     page_queue.put((1, seeds[i], 0, ''))  # priority, url, distance, parent_url
+    #     url_info = {'url': seeds[i], "distance": 0, 'score': 1}
+    #     output.write(json.dumps(url_info) + '\n')
+    #     visited[seeds[i]] = 1
 
     # initialize parser thread
     parse_thread = []
     parser_name_list = ['parse_1', 'parse_2', 'parse_3']
     for thread_id in parser_name_list:
-        thread = ParserThread(thread_id, data_queue, output)
+        thread = ParserThread(thread_id, data_queue, output, mode_choice)
         thread.start()
         parse_thread.append(thread)
 

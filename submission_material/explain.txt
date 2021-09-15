@@ -19,4 +19,4 @@ parser_thread(thread_id, queue, file)
 - file: data log file, used to record all the url we reached while crawling
 
 visited
-
+-
