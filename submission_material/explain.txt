@@ -1,0 +1,22 @@
+The crawler with priority works in the follow step:
+- User input key word and specify the number of seeds
+- The crawler start the crawler threads and initialize the crawl queue with the seeds url
+- The crawl thread consume the crawl queue, get the url with the highest priority, using the url to make a request and down the response html, storing the html to the data queue.
+- The parser thread consume the data queue, get the html in the front of the data queue, using xpath expression to extract the url in the href tags. Go through the list of the sub_url in the html, for each url, the crawler check if the url is valid(ambiguity of URLs, Different Types of Files, Checking for Earlier Visits), and if the url is valid, we print it to the update it score (novelty-assume length of the sub-url list is n, for every url we process, we decrease its score by 1/n; importance: for each url in the sub_url list, check if the url is already in the visited set, if yes, then check if the url is still in the crawler queue which means the rul haven't been processed by the crawler, we increment the score of this url by 1) and print is in the log file.
+
+
+The crawler with bfs version:
+- It works similar with the crawler with priority, we use the normal queue instead of a priority queue, and the score combining novelty and importance is not involved.
+
+The concept in the crawler:
+crawl_thead(thread_id, queue, file, type_black_list)
+- queue: crawl_queue to process the url, crawl_thead consume the queue and download the html
+- file: crawl_log file, used to record every url we visited
+- type_black_list: this is the configuration which specify the invalid mime type of the file(text/xml,image/gif,image/jpeg,image/png,application/xhtml+xml,application/xml,application/atom+xml,application/json,application/pdf,application/msword,application/octet-stream,application/x-www-form-urlencoded,multipart/form-data)
+
+parser_thread(thread_id, queue, file)
+- queue: data_queue to process the html response (extract the urls in the html)
+- file: data log file, used to record all the url we reached while crawling
+
+visited
+
