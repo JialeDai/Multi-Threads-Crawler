@@ -36,6 +36,9 @@ class CrawlThread(threading.Thread):
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) AppleWebKit/535.11 (KHTML, like Gecko) Chrome/17.0.963.56 Safari/535.11"
         ]
         while True:
+            if flag:
+                while not self.queue.empty():
+                    self.queue.get()
             if self.queue.empty():
                 break
             else:
@@ -51,6 +54,12 @@ class CrawlThread(threading.Thread):
                         request.add_header('User-Agent', user_agent)
                         response = urllib.request.urlopen(request)
                         if response.getcode() != 200 or response.info().get_content_type() in self.type_black_list:
+                            code = response.getcode()
+                            if code != 200:
+                                if code in error_info.keys():
+                                    error_info[code] += 1
+                                else:
+                                    error_info[code] = 1
                             print(response.getcode(), response.info().get_content_type(), self.type_black_list)
                             continue
                         html = response.read()
@@ -74,6 +83,12 @@ class CrawlThread(threading.Thread):
                         request.add_header('User-Agent', user_agent)
                         response = urllib.request.urlopen(request)
                         if response.getcode() != 200 or response.info().get_content_type() in self.type_black_list:
+                            code = response.getcode()
+                            if code != 200:
+                                if code in error_info.keys():
+                                    error_info[code] += 1
+                                else:
+                                    error_info[code] = 1
                             print(response.getcode(), response.info().get_content_type(), self.type_black_list)
                             continue
                         html = response.read()
@@ -85,43 +100,17 @@ class CrawlThread(threading.Thread):
                     except Exception as e:
                         print('crawl tread exception:', e)
 
-                # score = self.queue.get()[0]
-                # page = self.queue.get()[1]
-                # distance = self.queue.get()[2]
-                # print(self.thread_id, ' is crawling', page)
-                # ag_list = [
-                #     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
-                #     "Mozilla/5.0 (Windows NT 6.1; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
-                #     "Opera/9.80 (Macintosh; Intel Mac OS X 10.6.8; U; en) Presto/2.8.131 Version/11.11",
-                #     "Opera/9.80 (Windows NT 6.1; U; en) Presto/2.8.131 Version/11.11",
-                #     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) AppleWebKit/535.11 (KHTML, like Gecko) Chrome/17.0.963.56 Safari/535.11"
-                # ]
-
-                # try:
-                #     user_agent = random.choice(ag_list)
-                #     request = urllib.request.Request(page)
-                #     request.add_header('User-Agent', user_agent)
-                #     response = urllib.request.urlopen(request)
-                #     if response.getcode() != 200 or response.info().get_content_type() in self.type_black_list:
-                #         print(response.getcode(), response.info().get_content_type(), self.type_black_list)
-                #         continue
-                #     html = response.read()
-                #     crawl_info = {'url': page, 'score': score, 'page_size(byte)': sys.getsizeof(html),
-                #                   'download_time': time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-                #     self.file.write(json.dumps(crawl_info) + '\n')
-                #     data_queue.put({'score': score, 'html': html, 'distance': distance, 'url': page})
-                #     visited[page] = -1
-                # except Exception as e:
-                #     print('crawl tread exception:', e)
-
 
 class ParserThread(threading.Thread):
-    def __init__(self, thread_id, queue, file, crawl_mode):
+    def __init__(self, thread_id, queue, file, crawl_mode, crawl_limit, count):
         threading.Thread.__init__(self)
         self.thread_id = thread_id
         self.queue = queue
         self.file = file
         self.crawl_mode = crawl_mode
+        self.crawl_limit = crawl_limit
+        self.count = count
+
 
     def run(self):
         # print('启动线程', self.thread_id)
@@ -138,6 +127,11 @@ class ParserThread(threading.Thread):
             # print('退出了该线程：', self.thread_id)
 
     def parse_data(self, item):
+        print(self.count, self.crawl_limit)
+        if self.count >=  self.crawl_limit:
+            global flag
+            flag = True
+            self.queue.clear()
         if self.crawl_mode == '0':
             html = etree.HTML(item['html'])
             distance = item['distance']
@@ -150,6 +144,7 @@ class ParserThread(threading.Thread):
                         # site = convert_sub_url(url, site)
                         url_info = {'url': site, 'distance': str(distance + 1)}
                         self.file.write(json.dumps(url_info) + '\n')
+                        self.count+=1
                         if site not in visited.keys():
                             # print(site)
                             page_queue_bfs.put((site, distance + 1))
@@ -172,6 +167,7 @@ class ParserThread(threading.Thread):
                             cur_score = score + (i + 1) / sub_url_count  # novelty
                             url_info = {'url': site, "distance": distance + 1, 'score': cur_score}
                             self.file.write(json.dumps(url_info) + '\n')
+                            self.count += 1
                             if site not in visited.keys():
                                 print(site)
                                 page_queue.put((cur_score, site.encode('utf-8').decode(), distance + 1, url))
@@ -201,24 +197,6 @@ def convert_sub_url(url, sub_url):
 
 
 '''
-update the priority in page queue
-'''
-
-
-def update_priority(queue, url, priority):
-    tmp = []
-    while not queue.empty():
-        cur = queue.get()
-        if cur[1] == url:
-            cur[0] = priority
-            queue.put(cur)
-            break
-        tmp.append(cur)
-    for each in tmp:
-        queue.put(each)
-
-
-'''
 increase the priority of certain url
 '''
 
@@ -234,23 +212,6 @@ def increase_priority(queue, url):
             url = cur[3]
             new_item = (cur_score - 1, site, distance, url)
             tmp.append(new_item)
-            break
-        tmp.append(cur)
-    for each in tmp:
-        queue.put(each)
-
-
-'''
-decrease the priority of certain url
-'''
-
-
-def decrease_priority(queue, url):
-    tmp = []
-    while not queue.empty():
-        cur = queue.get()
-        if cur[1] == url:
-            cur[0] += 1
             break
         tmp.append(cur)
     for each in tmp:
@@ -290,9 +251,15 @@ visited = {}
 min_distance = 0
 flag = False
 mode = ''
+error_info = {}
+crawl_count = 0
+crawl_threads = []
+parse_thread = []
+
 
 
 def main():
+    global crawl_count
     seeds = []
     url = 'https://www.google.com'
     wd = input('input key word for searching:')
@@ -306,6 +273,7 @@ def main():
     config.read("./config/config.ini")
     driver_url = config['chromedriver']['location']
     type_black_list = config['type_black_list']['list'].split(',')
+    crawl_limit = int(config['crawl_limit']['number'])
     driver = webdriver.Chrome(driver_url)
     driver.get(full_url)
 
@@ -357,7 +325,7 @@ def main():
             output.write(json.dumps(url_info) + '\n')
             visited[seeds[i]] = 1
         # initialize the crawl threads
-        crawl_threads = []
+        # crawl_threads = []
         crawl_name_list = ['crawl_1', 'crawl_2', 'crawl_3']
         for thread_id in crawl_name_list:
             thread = CrawlThread(thread_id, page_queue, crawl_log_file, type_black_list,
@@ -365,26 +333,13 @@ def main():
             thread.start()  # start crawl thread
             crawl_threads.append(thread)
 
-    # num_seeds = input("input the number of seeds you want to start with:")
-    # num_seeds = int(num_seeds)
-    # if num_seeds > len(seeds):
-    #     num_seeds = len(seeds)
-
     print('start crawling')
-    # print('seeds:\n', seeds)
-    # print('Initialize seed queue......')
-
-    # for i in range(0, num_seeds):
-    #     page_queue.put((1, seeds[i], 0, ''))  # priority, url, distance, parent_url
-    #     url_info = {'url': seeds[i], "distance": 0, 'score': 1}
-    #     output.write(json.dumps(url_info) + '\n')
-    #     visited[seeds[i]] = 1
 
     # initialize parser thread
-    parse_thread = []
-    parser_name_list = ['parse_1', 'parse_2', 'parse_3']
+    # parse_thread = []
+    parser_name_list = ['parse_1', 'parse_2', 'parse_3', 'parse_4', 'parse_5', 'parse_6']
     for thread_id in parser_name_list:
-        thread = ParserThread(thread_id, data_queue, output, mode_choice)
+        thread = ParserThread(thread_id, data_queue, output, mode_choice,crawl_limit,crawl_count)
         thread.start()
         parse_thread.append(thread)
 
@@ -393,6 +348,9 @@ def main():
 
     for t in crawl_threads:
         t.join()
+
+    while not data_queue.empty():
+        data_queue.get_nowait();
 
     while not data_queue.empty():
         pass
