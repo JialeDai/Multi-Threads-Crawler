@@ -10,6 +10,7 @@ import urllib.request
 from queue import Queue, PriorityQueue
 from urllib.parse import urljoin
 from threading import Lock
+import os
 
 from lxml import etree
 from selenium import webdriver
@@ -28,6 +29,7 @@ class CrawlThread(threading.Thread):
         self.crawl_spider()
 
     def crawl_spider(self):
+        global error_info
         ag_list = [
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
             "Mozilla/5.0 (Windows NT 6.1; rv2.0.1) Gecko/20100101 Firefox/4.0.1",
@@ -38,8 +40,10 @@ class CrawlThread(threading.Thread):
         while True:
             if flag:
                 while not self.queue.empty():
+                    # print("emptying queue")
                     self.queue.get()
             if self.queue.empty():
+                # print('queue is empty')
                 return
             else:
                 if self.crawl_mode == '0':
@@ -47,8 +51,9 @@ class CrawlThread(threading.Thread):
                     if page == 'h':
                         continue
                     distance = self.queue.get()[1]
-                    print(self.thread_id, "is crawling", page, "distance: ", distance, "queue_size:",
-                          self.queue.qsize())
+                    mutex.acquire()
+                    print(self.thread_id, "is crawling:", page)
+                    mutex.release()
                     try:
                         user_agent = random.choice(ag_list)
                         request = urllib.request.Request(page)
@@ -56,12 +61,16 @@ class CrawlThread(threading.Thread):
                         response = urllib.request.urlopen(request)
                         if response.getcode() != 200 or response.info().get_content_type() in self.type_black_list:
                             code = response.getcode()
-                            if code != 200:
-                                if code in error_info.keys():
-                                    error_info[code] += 1
-                                else:
-                                    error_info[code] = 1
+                            # mutex.acquire()
+                            # if code != 200:
+                            #     if code in error_info.keys():
+                            #         error_info[code] += 1
+                            #     else:
+                            #         error_info[code] = 1
+                            # mutex.release()
+                            mutex.acquire()
                             print(response.getcode(), response.info().get_content_type(), self.type_black_list)
+                            mutex.release()
                             continue
                         html = response.read()
                         crawl_info = {'url': page, 'page_size(byte)': sys.getsizeof(html),
@@ -70,13 +79,18 @@ class CrawlThread(threading.Thread):
                         data_queue.put({'html': html, 'distance': distance, 'url': page})
                         visited[page] = -1
                     except Exception as e:
+                        if str(e) in error_info.keys():
+                            error_info[str(e)] = error_info[str(e)] + 1
+                        else:
+                            error_info[str(e)] = 1
                         print('crawl tread exception:', e)
                 elif self.crawl_mode == '1':
-                    if page == 'h':
-                        continue
+                    print("queue size:", self.queue.qsize())
                     score = self.queue.get()[0]
                     page = self.queue.get()[1]
                     distance = self.queue.get()[2]
+                    if page == 'h':
+                        continue
                     print(self.thread_id, ' is crawling', page)
                     try:
                         user_agent = random.choice(ag_list)
@@ -85,12 +99,14 @@ class CrawlThread(threading.Thread):
                         response = urllib.request.urlopen(request, timeout=3)
                         if response.getcode() != 200 or response.info().get_content_type() in self.type_black_list:
                             code = response.getcode()
-                            if code != 200:
-                                if code in error_info.keys():
-                                    error_info[code] += 1
-                                else:
-                                    error_info[code] = 1
+                            # if code != 200:
+                            #     if code in error_info.keys():
+                            #         error_info[code] += 1
+                            #     else:
+                            #         error_info[code] = 1
+                            mutex.acquire()
                             print(response.getcode(), response.info().get_content_type(), self.type_black_list)
+                            mutex.release()
                             continue
                         html = response.read()
                         crawl_info = {'url': page, 'score': score, 'page_size(byte)': sys.getsizeof(html),
@@ -99,7 +115,10 @@ class CrawlThread(threading.Thread):
                         data_queue.put({'score': score, 'html': html, 'distance': distance, 'url': page})
                         visited[page] = -1
                     except Exception as e:
-                        error_info[e] += 1
+                        if str(e) in error_info.keys():
+                            error_info[str(e)] = error_info[str(e)] + 1
+                        else:
+                            error_info[str(e)] = 1
                         print('crawl tread exception:', e)
 
 
@@ -132,6 +151,7 @@ class ParserThread(threading.Thread):
         if crawl_count >= self.crawl_limit:
             global flag
             flag = True
+        print(crawl_count, self.crawl_limit)
         if self.crawl_mode == '0':
             html = etree.HTML(item['html'])
             distance = item['distance']
@@ -165,9 +185,8 @@ class ParserThread(threading.Thread):
                             cur_score = score + (i + 1) / sub_url_count  # novelty
                             url_info = {'url': site, "distance": distance + 1, 'score': cur_score}
                             self.file.write(json.dumps(url_info) + '\n')
-                            self.count += 1
+                            crawl_count += 1
                             if site not in visited.keys():
-                                print(site)
                                 page_queue.put((cur_score, site.encode('utf-8').decode(), distance + 1, url))
                                 visited[site] = 1
                             else:
@@ -216,6 +235,10 @@ def increase_priority(queue, url):
     for each in tmp:
         queue.put(each)
 
+def get_FileSize(filePath):
+    fsize = os.path.getsize(filePath)
+    fsize = fsize/float(1024*1024)
+    return round(fsize,2)
 
 '''
 a url is invalid if it is in wrong format or the url is revisited and  has already been consumed by crawler
@@ -251,13 +274,14 @@ mutex = Lock()
 
 
 def main():
+    global crawl_count
     seeds = []
     url = 'https://www.google.com'
     wd = input('input key word for searching:')
     wd = urllib.request.quote(wd)
 
     # output = open('./data_log/' + wd + '.log', 'a', encoding='utf-8')
-    crawl_log_file = open('./crawl_log/' + 'crawl_' + wd + '.log', 'a', encoding='utf-8')
+    # crawl_log_file = open('./crawl_log/' + 'crawl_' + wd + '.log', 'a', encoding='utf-8')
     full_url = url + '/search?q=' + wd
 
     config = configparser.ConfigParser()
@@ -265,6 +289,7 @@ def main():
     driver_url = config['chromedriver']['location']
     type_black_list = config['type_black_list']['list'].split(',')
     crawl_limit = int(config['crawl_limit']['number'])
+    num_seeds = int(config['seeds']['number'])
     driver = webdriver.Chrome(driver_url)
     driver.get(full_url)
 
@@ -279,7 +304,7 @@ def main():
             progress_bar(count)
         try:
             driver.find_element_by_xpath('//*[@id="pnnext"]').click()
-        except:
+        except Exception:
             driver.close()
             break
     seeds = set(seeds)
@@ -296,9 +321,12 @@ def main():
 
     if mode_choice == '0':
         print('###################start with BFS mode#####################')
+        crawl_log_file = open('./crawl_log/' + 'crawl_' + wd + '_bfs.log', 'a', encoding='utf-8')
         output = open('./data_log/' + wd + '_bfs.log', 'a', encoding='utf-8')
-        for i in range(0, len(seeds)):
-            page_queue_bfs.put((seeds[i], 0))  # priority, url, distance, parent_url
+        num_seeds = min(num_seeds, len(seeds))
+        crawl_count = num_seeds
+        for i in range(0, num_seeds):
+            page_queue_bfs.put((seeds[i], 0))
             url_info = {'url': seeds[i], "distance": 0}
             output.write(json.dumps(url_info) + '\n')
             visited[seeds[i]] = 1
@@ -312,8 +340,11 @@ def main():
             crawl_threads.append(thread)
     elif mode_choice == '1':
         print('###################start with prioritized mode#############')
+        crawl_log_file = open('./crawl_log/' + 'crawl_' + wd + '_prioritized.log', 'a', encoding='utf-8')
         output = open('./data_log/' + wd + '_prioritized.log', 'a', encoding='utf-8')
-        for i in range(0, len(seeds)):
+        num_seeds = min(num_seeds, len(seeds))
+        crawl_count = num_seeds
+        for i in range(0, num_seeds):
             page_queue.put((1, seeds[i], 0, ''))  # priority, url, distance, parent_url
             url_info = {'url': seeds[i], "distance": 0, 'score': 1}
             output.write(json.dumps(url_info) + '\n')
@@ -353,8 +384,8 @@ def main():
     while not data_queue.empty():
         pass
 
-    global flag
-    flag = True
+    # global flag
+    # flag = True
     for t in parse_thread:
         t.join()
 
@@ -363,9 +394,17 @@ def main():
 
     end_time = datetime.datetime.now()
 
+    print('##################################crawler ends####################################')
     print("total crawling time:", (end_time - start_time).seconds, "sec")
-    print("total crawled pages:", crawl_count)
-
+    print("total crawled files:", crawl_count)
+    if mode_choice == "0":
+        print("output data log:",'./data_log/' + wd + '_bfs.log')
+        print("crawl log url:", './crawl_log/' + 'crawl_' + wd + '_bfs.log')
+        print("total size:", get_FileSize('./data_log/' + wd + '_bfs.log'))
+    elif mode_choice == '1':
+        print("output data log:",'./data_log/' + wd + '_prioritized.log')
+        print("crawl log url:", './crawl_log/' + 'crawl_' + wd + '_prioritized.log')
+        print("total size:", get_FileSize('./data_log/' + wd + '_prioritized.log'))
     print("error:", error_info)
 
 

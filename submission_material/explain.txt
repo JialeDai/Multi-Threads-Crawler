@@ -9,14 +9,33 @@ The crawler with bfs version:
 - It works similar with the crawler with priority, we use the normal queue instead of a priority queue, and the score combining novelty and importance is not involved.
 
 The concept in the crawler:
-crawl_thead(thread_id, queue, file, type_black_list)
+crawl_thead(thread_id, queue, file, type_black_list, crawl_mode)
 - queue: crawl_queue to process the url, crawl_thead consume the queue and download the html
 - file: crawl_log file, used to record every url we visited
 - type_black_list: this is the configuration which specify the invalid mime type of the file(text/xml,image/gif,image/jpeg,image/png,application/xhtml+xml,application/xml,application/atom+xml,application/json,application/pdf,application/msword,application/octet-stream,application/x-www-form-urlencoded,multipart/form-data)
+- crawl_mode: the crawler give two options 0 for simple bfs strategy, 1 for prioritized crawl.
 
-parser_thread(thread_id, queue, file)
+parser_thread(thread_id, queue, file, crawl_mode, crawl_limit)
 - queue: data_queue to process the html response (extract the urls in the html)
 - file: data log file, used to record all the url we reached while crawling
+- input for option of bfs and prioritized crawl
+-crawl_limit is configured in config.ini, specify the number of urls we want to crawl
+
+page_queue_bfs(site, distance + 1)
+
+page_queue(priority, url, distance, parent_url)
+- priority is the combination of novelty and importance
+- novelty: when we consume html in data_queue, we fetch all the sub url in the html and add the sub url to the page_queue. Every time we process a url in the sub url list, we in decrease the priority by 1/the number of sub url.
+- importance: when we are about to add a url to page_queue, we first check if the url is already in the page_queue, if yes, we update the priority score of the url in priority queue by increase it priority by 1.
+
+data_queue
 
 visited
--
+-is a simple dict structure, key is the page url, and the value is times we visited this url, if this url has already been processed in page_queue, we set its value to -1
+
+min_distance
+- Originally, distance for all seeds is set to be 0, every time we visited its children, we increment the distance by 1.
+
+flag
+- flag is a global variable that control the termination of the crawler. Every time we parser a url, we first check if the crawl_count is equal of larger than the configured crawl_limit, if yes, we set the flag to be true, and the crawler will be ready to terminate
+
