@@ -26,7 +26,8 @@ page_queue_bfs(site, distance + 1)
 page_queue(priority, url, distance, parent_url)
 - priority is the combination of novelty and importance
 - novelty: when we consume html in data_queue, we fetch all the sub url in the html and add the sub url to the page_queue. Every time we process a url in the sub url list, we in decrease the priority by 1/the number of sub url.
-- importance: when we are about to add a url to page_queue, we first check if the url is already in the page_queue, if yes, we update the priority score of the url in priority queue by increase it priority by 1.
+- importance: when we are about to add an url to page_queue, we first check if the url is already in the page_queue, if yes, we update the priority score of the url in priority queue by increase it priority by 1.
+- parent_url: this is the url from which the crawler get the html. Because for some href tag, it contains incomplete url, like (about.html) we need to know the parent url and call the urllib.join() to make up the complete url.
 
 data_queue
 
@@ -37,5 +38,5 @@ min_distance
 - Originally, distance for all seeds is set to be 0, every time we visited its children, we increment the distance by 1.
 
 flag
-- flag is a global variable that control the termination of the crawler. Every time we parser a url, we first check if the crawl_count is equal of larger than the configured crawl_limit, if yes, we set the flag to be true, and the crawler will be ready to terminate
+- flag is a global variable that control the termination of the crawler. Every time we parser an url, we first check if the crawl_count is equal of larger than the configured crawl_limit, if yes, we set the flag to be true, and the crawler will be ready to terminate
 
