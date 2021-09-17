@@ -85,7 +85,7 @@ class CrawlThread(threading.Thread):
                             error_info[str(e)] = 1
                         print('crawl tread exception:', e)
                 elif self.crawl_mode == '1':
-                    print("queue size:", self.queue.qsize())
+                    # print("queue size:", self.queue.qsize())
                     score = self.queue.get()[0]
                     page = self.queue.get()[1]
                     distance = self.queue.get()[2]
@@ -151,7 +151,7 @@ class ParserThread(threading.Thread):
         if crawl_count >= self.crawl_limit:
             global flag
             flag = True
-        print(crawl_count, self.crawl_limit)
+        # print(crawl_count, self.crawl_limit)
         if self.crawl_mode == '0':
             html = etree.HTML(item['html'])
             distance = item['distance']
@@ -395,6 +395,7 @@ def main():
     end_time = datetime.datetime.now()
 
     print('##################################crawler ends####################################')
+    print("number of seeds:", num_seeds)
     print("total crawling time:", (end_time - start_time).seconds, "sec")
     print("total crawled files:", crawl_count)
     if mode_choice == "0":
