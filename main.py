@@ -26,6 +26,7 @@ class CrawlThread(threading.Thread):
         self.crawl_mode = crawl_mode
 
     def run(self):
+        print('start', self.thread_id)
         self.crawl_spider()
 
     def crawl_spider(self):
@@ -60,7 +61,7 @@ class CrawlThread(threading.Thread):
                         request.add_header('User-Agent', user_agent)
                         response = urllib.request.urlopen(request)
                         if response.getcode() != 200 or response.info().get_content_type() in self.type_black_list:
-                            code = response.getcode()
+                            # code = response.getcode()
                             # mutex.acquire()
                             # if code != 200:
                             #     if code in error_info.keys():
@@ -96,7 +97,7 @@ class CrawlThread(threading.Thread):
                         user_agent = random.choice(ag_list)
                         request = urllib.request.Request(page)
                         request.add_header('User-Agent', user_agent)
-                        response = urllib.request.urlopen(request, timeout=3)
+                        response = urllib.request.urlopen(request, timeout=2)
                         if response.getcode() != 200 or response.info().get_content_type() in self.type_black_list:
                             code = response.getcode()
                             # if code != 200:
@@ -148,6 +149,7 @@ class ParserThread(threading.Thread):
     def parse_data(self, item):
         mutex.acquire()
         global crawl_count
+        global page_limit
         if crawl_count >= self.crawl_limit:
             global flag
             flag = True
@@ -156,7 +158,9 @@ class ParserThread(threading.Thread):
             html = etree.HTML(item['html'])
             distance = item['distance']
             result = html.xpath("//div/a/@href")
-            for i in range(0, len(result)):
+            limit_per_page = min(page_limit, len(result))
+            for i in range(0, limit_per_page):
+                # print(i, limit_per_page, len(result))
                 site = result[i]
                 try:
                     if check_validation(site, visited):
@@ -176,8 +180,10 @@ class ParserThread(threading.Thread):
                 distance = item['distance']
                 url = item['url']
                 result = html.xpath("//div/a/@href")
+                limit_per_page = min(page_limit, len(result))
                 sub_url_count = len(result)
-                for i in range(0, len(result)):
+                for i in range(0, limit_per_page):
+                    # print(i, limit_per_page, len(result))
                     site = result[i]
                     try:
                         if check_validation(site, visited):
@@ -271,10 +277,12 @@ crawl_count = 0
 crawl_threads = []
 parse_thread = []
 mutex = Lock()
+page_limit = 0
 
 
 def main():
     global crawl_count
+    global page_limit
     seeds = []
     url = 'https://www.google.com'
     wd = input('input key word for searching:')
@@ -288,7 +296,8 @@ def main():
     config.read("./config/config.ini")
     driver_url = config['chromedriver']['location']
     type_black_list = config['type_black_list']['list'].split(',')
-    crawl_limit = int(config['crawl_limit']['number'])
+    crawl_limit = int(config['crawl_limit']['total_number'])
+    page_limit = int(config['crawl_limit']['number_per_url'])
     num_seeds = int(config['seeds']['number'])
     driver = webdriver.Chrome(driver_url)
     driver.get(full_url)
@@ -358,7 +367,7 @@ def main():
             thread.start()  # start crawl thread
             crawl_threads.append(thread)
 
-    print('start crawling')
+    # print('start crawling')
 
     # initialize parser thread
     # parse_thread = []
