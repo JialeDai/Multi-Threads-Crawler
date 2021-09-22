@@ -22,7 +22,7 @@ First, some general rules for all homeworks:
 
  - always provide the readme files described below.
 
- - DO NOT submit the content of all of the files 
+ - DO NOT submit the content of all the files 
    that your crawler crawled.
 
 Now the details on what to submit for the first 

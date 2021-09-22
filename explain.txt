@@ -29,7 +29,12 @@ page_queue(priority, url, distance, parent_url)
 - importance: when we are about to add an url to page_queue, we first check if the url is already in the page_queue, if yes, we update the priority score of the url in priority queue by increase it priority by 1.
 - parent_url: this is the url from which the crawler get the html. Because for some href tag, it contains incomplete url, like (about.html) we need to know the parent url and call the urllib.join() to make up the complete url.
 
-data_queue
+data_queue({'score', 'html', 'distance', 'parent_url'})
+- data_queue is used to store the downloaded information. data_queue is consumed by parser_thread to get and process all urls in the html
+- score: the score of the parent url, used to compute the score of the children url.
+- html: the html text got by crawl_thread, will be processed in parser_thread
+- distance: the distance of the parent url, used to update the distance of its children url. When we add a children url to page_queue, we increment its parent's distance by 1 and used as the distance of the current url.
+- parent_url: the parent url is used to convert some incomplete url got from html text to complete url. (dining.html -> https://housing.nyu.edu/summer/dining.html)
 
 visited
 -is a simple dict structure, key is the page url, and the value is times we visited this url, if this url has already been processed in page_queue, we set its value to -1
@@ -40,3 +45,5 @@ min_distance
 flag
 - flag is a global variable that control the termination of the crawler. Every time we parser an url, we first check if the crawl_count is equal of larger than the configured crawl_limit, if yes, we set the flag to be true, and the crawler will be ready to terminate
 
+configurations
+-
