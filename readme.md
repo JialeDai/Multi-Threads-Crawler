@@ -1,4 +1,5 @@
 # CS_GY_6913 Web search engine HW1
+Build a multi-threaded web crawler that downloads pages with priorities based on some combination of novelty and importance
 ## file structure:
 ### fold:
 - config: contains the crawler configuration
